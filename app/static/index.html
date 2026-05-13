@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF 打印保护移除工具</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.5;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(circle at top left, #dbeafe, transparent 35%), #f8fafc;
+        color: #0f172a;
+      }
+
+      main {
+        width: min(92vw, 720px);
+        padding: 2rem;
+        border-radius: 24px;
+        background: rgb(255 255 255 / 0.92);
+        box-shadow: 0 24px 70px rgb(15 23 42 / 0.14);
+      }
+
+      h1 {
+        margin-top: 0;
+        font-size: clamp(1.8rem, 4vw, 2.7rem);
+      }
+
+      .notice {
+        padding: 1rem;
+        border-left: 4px solid #2563eb;
+        background: #eff6ff;
+        border-radius: 12px;
+      }
+
+      form {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+
+      label {
+        font-weight: 650;
+      }
+
+      input[type="file"],
+      input[type="password"] {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 0.35rem;
+        padding: 0.8rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
+        background: white;
+        color: #0f172a;
+      }
+
+      .checkbox-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        font-weight: 500;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 0.9rem 1.25rem;
+        background: #2563eb;
+        color: white;
+        font-size: 1rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: progress;
+        opacity: 0.72;
+      }
+
+      #status {
+        min-height: 1.5rem;
+        font-weight: 650;
+      }
+
+      .error {
+        color: #b91c1c;
+      }
+
+      .success {
+        color: #047857;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: radial-gradient(circle at top left, #1e3a8a, transparent 35%), #020617;
+          color: #e2e8f0;
+        }
+
+        main {
+          background: rgb(15 23 42 / 0.92);
+        }
+
+        .notice {
+          background: #172554;
+        }
+
+        input[type="file"],
+        input[type="password"] {
+          background: #0f172a;
+          color: #e2e8f0;
+          border-color: #334155;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>PDF 打印保护移除工具</h1>
+      <p class="notice">
+        仅上传你拥有或已获得明确授权修改的 PDF。服务器会生成一个未加密副本，清除 PDF 权限标记中的打印限制。
+      </p>
+      <form id="upload-form">
+        <label>
+          选择 PDF 文件
+          <input id="file" name="file" type="file" accept="application/pdf,.pdf" required />
+        </label>
+        <label>
+          打开密码（如无密码可留空）
+          <input id="password" name="password" type="password" autocomplete="current-password" />
+        </label>
+        <label class="checkbox-row">
+          <input id="confirm" name="confirm_authorized" type="checkbox" value="true" required />
+          <span>我确认自己有权移除该 PDF 的打印限制。</span>
+        </label>
+        <button id="submit" type="submit">上传并生成可打印副本</button>
+        <div id="status" role="status" aria-live="polite"></div>
+      </form>
+    </main>
+    <script>
+      const form = document.querySelector("#upload-form");
+      const statusBox = document.querySelector("#status");
+      const submitButton = document.querySelector("#submit");
+
+      function setStatus(message, className = "") {
+        statusBox.textContent = message;
+        statusBox.className = className;
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        setStatus("正在处理 PDF……");
+        submitButton.disabled = true;
+
+        try {
+          const response = await fetch("/unlock-print", {
+            method: "POST",
+            body: new FormData(form),
+          });
+
+          if (!response.ok) {
+            let message = "处理失败，请重试。";
+            try {
+              const error = await response.json();
+              message = error.detail || message;
+            } catch (_) {
+              // Keep the generic message when the server does not return JSON.
+            }
+            throw new Error(message);
+          }
+
+          const blob = await response.blob();
+          const downloadUrl = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = downloadUrl;
+          link.download = "print-enabled.pdf";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(downloadUrl);
+          setStatus("处理完成，已开始下载。", "success");
+        } catch (error) {
+          setStatus(error.message, "error");
+        } finally {
+          submitButton.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
